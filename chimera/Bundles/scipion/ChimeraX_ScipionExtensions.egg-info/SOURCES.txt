@@ -1,0 +1,16 @@
+ChimeraX_ScipionExtensions.egg-info/PKG-INFO
+ChimeraX_ScipionExtensions.egg-info/SOURCES.txt
+ChimeraX_ScipionExtensions.egg-info/dependency_links.txt
+ChimeraX_ScipionExtensions.egg-info/requires.txt
+ChimeraX_ScipionExtensions.egg-info/top_level.txt
+src/__init__.py
+src/api.py
+src/cmd.py
+src/constants.py
+src/docs/user/commands/scipion.html
+src/docs/user/commands/scipioncombine.html
+src/docs/user/commands/scipionrs.html
+src/docs/user/commands/scipionshell.html
+src/docs/user/commands/scipionshellcrown.html
+src/docs/user/commands/scipionss.html
+src/docs/user/commands/scipionwrite.html

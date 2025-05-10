@@ -1,0 +1,45 @@
+Metadata-Version: 2.1
+Name: ChimeraX-ScipionExtensions
+Version: 1.3
+Summary: Command to allow interaction between scipion and chimera
+Home-page: http://scipion.i2pc.es/
+Author: Roberto Marabini
+Author-email: scipion@cnb.csic.es
+Classifier: Framework :: ChimeraX
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Visualization
+Classifier: Topic :: Scientific/Engineering :: Chemistry
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Development Status :: 3 - Alpha
+Classifier: License :: Freeware
+Classifier: Environment :: MacOS X :: Aqua
+Classifier: Environment :: Win32 (MS Windows)
+Classifier: Environment :: X11 Applications
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows :: Windows 10
+Classifier: Operating System :: POSIX :: Linux
+Classifier: ChimeraX :: Bundle :: General :: 1,10 :: chimerax.scipionExtensions ::  :: 
+Classifier: ChimeraX :: Command :: scipionwrite :: General ::
+        Save a model file (3dmap or atomic model) so Scipion may import it
+Classifier: ChimeraX :: Command :: scipionss :: General ::
+        Save session, it may be recovered from scipion
+Classifier: ChimeraX :: Command :: scipionrs :: General ::
+        Restore last chimera session saved with scipionss
+Classifier: ChimeraX :: Command :: scipioncombine :: General ::
+        Combine two models
+Classifier: ChimeraX :: Command :: scipionshell :: General ::
+        shows the density of a 3D Map on a spherical shell of the map at a given radius r
+Classifier: ChimeraX :: Command :: scipionshellcrown :: General ::
+        shows a shell of a 3D map between two radii
+Classifier: ChimeraX :: Command :: scipion :: General ::
+       summary with all scipion related commands
+Requires-Python: >=3.7
+
+scipionwrite: saves model file
+    scipionss: saves chimera session
+    scipionrs: restores chimera sesion
+    scipioncombine: combines two models
+    scipionshell: shows the density of a 3D Map on a spherical shell of the map at a given radius
+    scipionshellcrown: shows a shell of a 3D map between two radii
+    scipion: summary with all scipion related commands
