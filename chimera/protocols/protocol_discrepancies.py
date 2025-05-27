@@ -71,7 +71,7 @@ class ChimeraProtDiscrepancies(EMProtocol):
         self.extra_files = []
         for i, atomstruct in enumerate(self.structures):
             ori_file = atomstruct.get().getFileName()
-            dest_file = os.path.basename(ori_file)
+            dest_file = os.path.basename(ori_file).replace("_", "")
             dest_path = self._getExtraPath(dest_file)
             pwutils.createLink(ori_file, dest_path)
             if not os.path.exists(dest_path):
@@ -265,109 +265,94 @@ class ChimeraProtDiscrepancies(EMProtocol):
 
                             continue
 
-                # mat_pos_ori stores the number of the amino acids in the model and mat_pos_align the position in the alignment
-                mat_pos1_ori = []
-                mat_pos1_align = []
+                # Build mapping from alignment position to model residue number
+                mat_pos1_align, mat_pos1_resnum = [], []
+                mat_pos2_align, mat_pos2_resnum = [], []
 
                 pos = 0
                 for i, value in enumerate(mat1):
                     if value != 0:
-                        mat_pos1_ori.append(pos)
                         mat_pos1_align.append(i)
                         pos += 1
-
-                mat_pos2_ori = []
-                mat_pos2_align = []
+                        mat_pos1_resnum.append(pos)
                 pos = 0
                 for i, value in enumerate(mat2):
                     if value != 0:
-                        mat_pos2_ori.append(pos)
                         mat_pos2_align.append(i)
                         pos += 1
+                        mat_pos2_resnum.append(pos)
 
                 # Write RMSD residues at the end of each file
                 out_model1_file = os.path.join(folder_path, f"out_{model1}.cif")
                 out_model2_file = os.path.join(folder_path, f"out_{model2}.cif")
-                occupancy1 = []
-                occupancy2 = []
 
-                aa_occupancy1 = [[], []]  # First line: amino acid number / Second line: rmsd value
-                with open(out_model1_file, 'a') as file1:
-                    for i in range(len(mat_pos1_ori)):
-                        rmsd_value = mat_rmsd[mat_pos1_align[i] + 1]
-                        file1.write(f"RMSD residues A:{i + 1}   {rmsd_value}\n")
-                        occupancy1.append(rmsd_value)
-                        aa_occupancy1[0].append(i + 1)
-                        aa_occupancy1[1].append(rmsd_value)
+                # --- Use dict for safe mapping of residue number to RMSD ---
+                occupancy1_dict = {}
+                aa_occupancy1 = [[], []]
+                for i, resnum in enumerate(mat_pos1_resnum):
+                    align_idx = mat_pos1_align[i]
+                    rmsd_value = mat_rmsd[align_idx] if align_idx < len(mat_rmsd) else 250.0
+                    occupancy1_dict[resnum] = rmsd_value
+                    aa_occupancy1[0].append(resnum)
+                    aa_occupancy1[1].append(rmsd_value)
                 self.aa_rmsd.append({model1: aa_occupancy1})
 
-                aa_occupancy2 = [[], []]  # First line: amino acid number / Second line: rmsd value
-                with open(out_model2_file, 'a') as file2:
-                    for i in range(len(mat_pos2_ori)):
-                        rmsd_value = mat_rmsd[mat_pos2_align[i] + 1]
-                        file2.write(f"RMSD residues A:{i + 1}   {rmsd_value}\n")
-                        occupancy2.append(rmsd_value)
-                        aa_occupancy2[0].append(i + 1)
-                        aa_occupancy2[1].append(rmsd_value)
+                occupancy2_dict = {}
+                aa_occupancy2 = [[], []]
+                for i, resnum in enumerate(mat_pos2_resnum):
+                    align_idx = mat_pos2_align[i]
+                    rmsd_value = mat_rmsd[align_idx] if align_idx < len(mat_rmsd) else 250.0
+                    occupancy2_dict[resnum] = rmsd_value
+                    aa_occupancy2[0].append(resnum)
+                    aa_occupancy2[1].append(rmsd_value)
                 self.aa_rmsd.append({model2: aa_occupancy2})
 
-                # Add occupancy to each model
+                # Add occupancy to each model using dict to avoid index errors
                 with open(out_model1_file, 'r') as file1, open(out_model2_file, 'r') as file2:
                     lines1 = file1.readlines()
                     lines2 = file2.readlines()
 
                 subs = []
+
+                def process_lines(lines, occupancy_dict, mod_file):
+                    for line in lines:
+                        if line.startswith('ATOM'):
+                            atom_line = line
+                            clean_line = re.sub(r'\s+', ' ', atom_line).strip()
+                            columns = clean_line.split()
+                            if '1111.11' in columns:
+                                strip_position = columns.index('1111.11')
+                                subs.append(strip_position)
+                            resnum_str = columns[8]
+                            if resnum_str.isdigit():
+                                resnum = int(resnum_str)
+                                new_value = round(occupancy_dict.get(resnum, 0.0), 2)
+                                modified_line = re.sub(r'1111\.11', str(new_value), atom_line)
+                                mod_file.write(modified_line)
+                            else:
+                                mod_file.write(line)
+                        else:
+                            mod_file.write(line)
+
                 with open(out_model1_file, 'w') as mod_file1, open(out_model2_file, 'w') as mod_file2:
-                    for line in lines1:
-                        if line.startswith('ATOM'):
-                            atom_line = line
-                            clean_line = re.sub(r'\s+', ' ', atom_line).strip()
-                            columns = clean_line.split()
+                    process_lines(lines1, occupancy1_dict, mod_file1)
+                    process_lines(lines2, occupancy2_dict, mod_file2)
 
-                            if '1111.11' in columns:
-                                strip_position = columns.index('1111.11')
-                                subs.append(strip_position)
+                subs = list(set(subs))
+                self.occ_position[0].append(model1)
+                self.occ_position[0].append(model2)
+                if len(subs) > 1:
+                    self.occ_position[1].append(subs[0])
+                    self.occ_position[1].append(subs[1])
+                else:
+                    self.occ_position[1].append(subs[0])
+                    self.occ_position[1].append(subs[0])
 
-                            index = int(columns[8])
-                            new_value = round(occupancy1[index - 1], 2)
-                            modified_line = re.sub(r'1111\.11', str(new_value), atom_line)
-                            mod_file1.write(modified_line)
-                        else:
-                            mod_file1.write(line)
-
-                    for line in lines2:
-                        if line.startswith('ATOM'):
-                            atom_line = line
-                            clean_line = re.sub(r'\s+', ' ', atom_line).strip()
-                            columns = clean_line.split()
-
-                            if '1111.11' in columns:
-                                strip_position = columns.index('1111.11')
-                                subs.append(strip_position)
-
-                            index = int(columns[8])
-                            new_value = round(occupancy2[index - 1], 2)
-                            modified_line = re.sub(r'1111\.11', str(new_value), atom_line)
-                            mod_file2.write(modified_line)
-                        else:
-                            mod_file2.write(line)
-
-                    subs = list(set(subs))  # Remove duplicates
-                    self.occ_position[0].append(model1)
-                    self.occ_position[0].append(model2)
-                    if len(subs) > 1:
-                        self.occ_position[1].append(subs[0])
-                        self.occ_position[1].append(subs[1])
-                    else:
-                        self.occ_position[1].append(subs[0])
-                        self.occ_position[1].append(subs[0])
-
-                    unique = {}
-                    for k, v in zip(*self.occ_position):
-                        if k not in unique:
-                            unique[k] = v
-
-                    self.occ_position = [list(unique.keys()), list(unique.values())]
+                unique = {}
+                for k, v in zip(*self.occ_position):
+                    if k not in unique:
+                        unique[k] = v
+                self.occ_position = [list(unique.keys()), list(unique.values())]
 
     def final_models(self):
         output_path = os.path.join(self.getWorkingDir(), 'extra')
@@ -376,6 +361,7 @@ class ChimeraProtDiscrepancies(EMProtocol):
         os.makedirs(final_output_path, exist_ok=True)
 
         cif_counter = {}
+        rmsd_dict = {}
 
         for folder in os.listdir(output_path):
             folder_path = os.path.join(output_path, folder)
@@ -393,21 +379,16 @@ class ChimeraProtDiscrepancies(EMProtocol):
                         dest_file = os.path.join(final_output_path, new_file_name)
                         shutil.copy(src_file, dest_file)
 
-                rmsd_dict = {}
                 for i, model in enumerate(self.occ_position[0]):
                     occ = self.occ_position[1][i]
                     rmsd_dict[model] = []
-
                     model_files = [
                         file_name for file_name in os.listdir(final_output_path)
                         if file_name.startswith(f"out_{model}")
                     ]
-
                     for model_file in model_files:
                         rmsd_matrix = []
                         model_file_path = os.path.join(final_output_path, model_file)
-
-                        # Open the file and process lines starting with "ATOM"
                         with open(model_file_path, 'r') as file:
                             for line in file:
                                 if line.startswith('ATOM'):
@@ -416,7 +397,6 @@ class ChimeraProtDiscrepancies(EMProtocol):
                                     if len(columns) > occ:
                                         rmsd_value = float(columns[occ])
                                         rmsd_matrix.append(rmsd_value)
-
                         rmsd_dict[model].append(rmsd_matrix)
 
             averaged_rmsd_dict = {}
@@ -425,12 +405,10 @@ class ChimeraProtDiscrepancies(EMProtocol):
                     averaged_matrix = [
                         sum(values) / len(values) for values in zip(*matrices)
                     ]
-
                     averaged_rmsd_dict[model] = averaged_matrix
 
             for i, (model, averaged_matrix) in enumerate(averaged_rmsd_dict.items()):
-                occ = self.occ_position[1][i]  # Get the occupancy position for the current model
-
+                occ = self.occ_position[1][i]
                 model_files = [
                     file_name for file_name in os.listdir(final_output_path)
                     if file_name.startswith(f"out_{model}_")
@@ -440,7 +418,6 @@ class ChimeraProtDiscrepancies(EMProtocol):
                     os.remove(file_path)
 
                 remaining_file = os.path.join(final_output_path, f"out_{model}.cif")
-
                 updated_lines = []
                 counter = 0
                 with open(remaining_file, 'r') as file:
@@ -455,24 +432,20 @@ class ChimeraProtDiscrepancies(EMProtocol):
                             updated_lines.append(updated_line)
                         else:
                             updated_lines.append(line)
-
                 with open(remaining_file, 'w') as file:
                     file.writelines(updated_lines)
 
         # Modify amino acids RMSD:
         final_aa_rmsd = []
         grouped_rmsd = {}
-
         for entry in self.aa_rmsd:
             for model_name, matrix in entry.items():
                 if model_name not in grouped_rmsd:
                     grouped_rmsd[model_name] = []
                 grouped_rmsd[model_name].append(matrix)
 
-        # Compute the mean matrix for each model and store it in final_aa_rmsd
         for model_name, matrices in grouped_rmsd.items():
             mean_matrix = [[], []]
-
             num_matrices = len(matrices)
             for line_index in range(2):
                 summed_values = [0] * len(matrices[0][line_index])
@@ -480,28 +453,20 @@ class ChimeraProtDiscrepancies(EMProtocol):
                     for i, value in enumerate(matrix[line_index]):
                         summed_values[i] += value
                 mean_matrix[line_index] = [val / num_matrices for val in summed_values]
-
             final_aa_rmsd.append({model_name: mean_matrix})
 
-        # Add RMSD to the end of the final models:
         for file_name in os.listdir(final_output_path):
             if file_name.startswith("out_") and file_name.endswith(".cif"):
-                model = file_name[4:-4]  # Extract the model name from the file name (e.g., "out_model.cif" -> "model")
+                model = file_name[4:-4]
                 file_path = os.path.join(final_output_path, file_name)
-
-                # Find the corresponding matrix in final_aa_rmsd
                 matching_entry = next((entry for entry in final_aa_rmsd if model in entry), None)
                 if not matching_entry:
                     raise Exception(f"No matching RMSD matrix found for model {model} in final_aa_rmsd")
-
-                rmsd_matrix = matching_entry[model][1]  # Second line of the matrix contains the RMSD values
-
-                # Read the file and update the RMSD values
+                rmsd_matrix = matching_entry[model][1]
                 updated_lines = []
                 with open(file_path, 'r') as file:
                     lines = file.readlines()
-                    modify_rmsd = False  # Flag to start modifying RMSD lines
-
+                    modify_rmsd = False
                     for line in lines:
                         if line.startswith("_scipion_attributes.value"):
                             modify_rmsd = True
@@ -514,25 +479,14 @@ class ChimeraProtDiscrepancies(EMProtocol):
                             updated_lines.append(updated_line)
                         else:
                             updated_lines.append(line)
-
-                # Write the updated lines back to the file
                 with open(file_path, 'w') as file:
                     file.writelines(updated_lines)
 
-
-        # Define outputs directly within final_models
         for file_name in os.listdir(final_output_path):
             file_path = os.path.join(final_output_path, file_name)
             if os.path.isfile(file_path):
-                # Create an AtomStruct object for each file
                 output = AtomStruct(filename=file_path)
-
-                # Use the file name (without extension) as the output name
                 output_name = os.path.splitext(file_name)[0]
-
-                # Define the output dynamically
                 self._defineOutputs(**{output_name: output})
-
-                # Relate the output to the input structures
                 self._defineSourceRelation(self.structures, output)
 
