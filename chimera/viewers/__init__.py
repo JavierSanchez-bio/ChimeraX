@@ -7,5 +7,5 @@ from .viewer import (ChimeraProtRigidFitViewer,
                      PAEViewer,
                      )
 from .viewer_contacts import ChimeraProtContactsViewer
-
 from .viewer_discrepancies import ChimeraProtDiscrepanciesViewer
+
